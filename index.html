@@ -1,0 +1,743 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Secret Message Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0b0f19; --panel:rgba(19,28,43,.72); --panel-strong:rgba(15,23,38,.92);
+  --line:rgba(255,255,255,.10); --ink:#e7f2ff; --muted:#91a4ba;
+  --cyan:#00f5d4; --blue:#38bdf8; --green:#34d399; --red:#fb7185;
+  --mono:"JetBrains Mono","Courier New",monospace;
+  --sans:Inter,Poppins,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}
+html{min-height:100%;scroll-behavior:smooth}
+body{
+  margin:0; min-height:100vh; overflow-x:hidden; color:var(--ink);
+  background:radial-gradient(ellipse at 50% -15%,rgba(0,245,212,.13),transparent 42%),
+    radial-gradient(ellipse at 100% 55%,rgba(56,189,248,.10),transparent 36%),var(--bg);
+  font-family:var(--sans); -webkit-font-smoothing:antialiased;
+}
+[hidden]{display:none!important}
+button,input,textarea{font:inherit}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
+.sheet{width:min(100% - 28px,480px);margin:0 auto;padding:28px 0 64px}
+.hero{padding:12px 2px 22px}
+.eyebrow{
+  display:inline-flex;align-items:center;gap:8px;margin:0 0 15px;padding:7px 11px;
+  border:1px solid rgba(0,245,212,.24);border-radius:999px;background:rgba(0,245,212,.08);
+  color:var(--cyan);font-size:11px;font-weight:800;letter-spacing:.13em;text-transform:uppercase
+}
+.eyebrow:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 12px var(--cyan)}
+h1{font-size:clamp(38px,11vw,54px);line-height:.99;letter-spacing:-.055em;font-weight:850;margin:0 0 14px}
+.lede{max-width:36ch;color:var(--muted);font-size:15px;line-height:1.65;margin:0}
+#ocrStatus{
+  display:inline-flex;align-items:center;gap:9px;min-height:30px;margin:16px 0 0;padding:6px 11px;
+  border:1px solid rgba(52,211,153,.24);border-radius:999px;background:rgba(52,211,153,.08);
+  color:#a7f3d0!important;font-size:11px;font-weight:750;letter-spacing:.04em
+}
+#ocrStatus:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 0 rgba(52,211,153,.55);animation:status-pulse 1.8s infinite}
+@keyframes status-pulse{70%{box-shadow:0 0 0 7px rgba(52,211,153,0)}100%{box-shadow:0 0 0 0 rgba(52,211,153,0)}}
+.route{
+  display:flex;align-items:center;gap:8px;margin:0 0 16px;padding:6px;
+  border:1px solid var(--line);border-radius:15px;background:rgba(255,255,255,.035);backdrop-filter:blur(12px)
+}
+.route .dash{height:1px;flex:1;min-width:8px;background:linear-gradient(90deg,transparent,var(--line),transparent)}
+.route button{
+  min-height:44px;padding:10px 12px;border:0;border-radius:10px;background:transparent;
+  color:var(--muted);font-size:13px;font-weight:750;white-space:nowrap;cursor:pointer
+}
+.route button[aria-selected="true"]{background:rgba(0,245,212,.10);color:var(--cyan);box-shadow:inset 0 0 0 1px rgba(0,245,212,.15)}
+.pair{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:start}
+.pair>div,.results,.how-card{
+  min-width:0;padding:19px;border:1px solid var(--line);border-radius:20px;
+  background:var(--panel);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  box-shadow:0 18px 48px rgba(0,0,0,.20)
+}
+.results{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;margin-top:14px;animation:fade-up .45s ease both}
+h2{margin:0 0 8px;font-size:19px;font-weight:750;letter-spacing:-.025em}
+.section-help{margin:0 0 16px;color:var(--muted);font-size:13px;line-height:1.6}
+.field-label{display:block;margin:0 0 9px;font-size:14px;font-weight:750;color:#d8e8f8}
+textarea{
+  display:block;width:100%;min-width:0;max-width:100%;padding:14px;border:1px solid rgba(148,163,184,.24);
+  border-radius:13px;background:rgba(3,8,18,.65);color:#e6f4ff;
+  font:400 15px/1.7 var(--mono);resize:vertical;overflow-wrap:anywhere
+}
+textarea::placeholder{color:#5e7087}
+textarea:focus{outline:1px solid var(--cyan);border-color:rgba(0,245,212,.55)}
+.count{margin:7px 0 0;text-align:right;color:var(--muted);font-size:11px}
+.actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:15px}
+.btn{
+  position:relative;display:inline-flex;align-items:center;justify-content:center;gap:9px;
+  min-height:48px;min-width:0;padding:12px 15px;border:1px solid rgba(148,163,184,.25);
+  border-radius:13px;background:rgba(255,255,255,.045);color:var(--ink);
+  font-size:13px;font-weight:750;text-align:center;cursor:pointer;text-decoration:none;
+  transition:transform .16s ease,border-color .16s ease,background .16s ease,box-shadow .16s ease
+}
+.btn:hover:not(:disabled){border-color:rgba(0,245,212,.48);background:rgba(0,245,212,.08)}
+.btn:active:not(:disabled){transform:scale(.97)}
+.btn.primary{border-color:rgba(0,245,212,.45);background:linear-gradient(135deg,rgba(0,245,212,.17),rgba(56,189,248,.14));color:#bffff5;box-shadow:0 0 22px rgba(0,245,212,.07)}
+.btn.primary:hover:not(:disabled){box-shadow:0 0 24px rgba(0,245,212,.18)}
+.btn:disabled{opacity:.42;cursor:not-allowed}
+.btn.is-loading{pointer-events:none;box-shadow:0 0 22px rgba(0,245,212,.22);animation:button-pulse 1s ease-in-out infinite alternate}
+.btn.is-loading:after{
+  content:"";width:14px;height:14px;border:2px solid rgba(0,245,212,.25);
+  border-top-color:var(--cyan);border-radius:50%;animation:spin .7s linear infinite
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes button-pulse{to{box-shadow:0 0 26px rgba(0,245,212,.32)}}
+.note{min-height:20px;margin:12px 0 0;color:var(--muted);font-size:12px;line-height:1.5}
+.note.err{color:var(--red);font-weight:700}.note.ok{color:#a7f3d0;font-weight:700}
+.cipher-preview{
+  min-height:86px;padding:14px;border:1px solid rgba(0,245,212,.2);border-radius:13px;
+  background:rgba(2,8,18,.72);color:var(--cyan);font:700 17px/1.8 var(--mono);
+  letter-spacing:.035em;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text
+}
+.stamps{display:flex;flex-wrap:wrap;gap:8px;min-height:72px;align-items:center}
+.stamp{display:inline-grid;place-items:center;width:42px;height:49px;border:1px solid rgba(0,245,212,.6);border-radius:7px;color:var(--cyan);font:700 22px var(--mono);background:rgba(0,245,212,.05);transform:rotate(var(--r,0deg))}
+.stamp.drop{animation:stamp-in .42s cubic-bezier(.2,.9,.3,1.15) both;animation-delay:var(--d,0ms)}
+@keyframes stamp-in{from{transform:rotate(var(--r,0deg)) scale(1.35);opacity:0}to{transform:rotate(var(--r,0deg)) scale(1);opacity:1}}
+.gap{width:16px}.empty{color:var(--muted);font-size:13px}
+.restored{margin:0;min-height:2.2em;color:#d1fae5;font:500 21px/1.65 var(--mono);overflow-wrap:anywhere;white-space:pre-wrap}
+.restored.marked{color:#d1fae5}
+.viewfinder{position:relative;aspect-ratio:4/3;overflow:hidden;border:1px solid rgba(0,245,212,.38);border-radius:17px;background:#020711;box-shadow:inset 0 0 28px rgba(0,245,212,.06),0 0 20px rgba(0,245,212,.06)}
+.viewfinder video,.viewfinder img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.scan-guide{position:absolute;left:11%;top:21%;width:78%;height:58%;border:0;border-radius:8px;box-shadow:0 0 0 9999px rgba(2,7,17,.36);pointer-events:none}
+.scan-guide:before,.scan-guide:after{content:"";position:absolute;inset:-2px;border:0;border-radius:8px;background:
+ linear-gradient(var(--cyan),var(--cyan)) left top/22px 3px no-repeat,
+ linear-gradient(var(--cyan),var(--cyan)) left top/3px 22px no-repeat,
+ linear-gradient(var(--cyan),var(--cyan)) right top/22px 3px no-repeat,
+ linear-gradient(var(--cyan),var(--cyan)) right top/3px 22px no-repeat,
+ linear-gradient(var(--cyan),var(--cyan)) left bottom/22px 3px no-repeat,
+ linear-gradient(var(--cyan),var(--cyan)) left bottom/3px 22px no-repeat,
+ linear-gradient(var(--cyan),var(--cyan)) right bottom/22px 3px no-repeat,
+ linear-gradient(var(--cyan),var(--cyan)) right bottom/3px 22px no-repeat;
+ filter:drop-shadow(0 0 5px var(--cyan))}
+.scan-guide:after{inset:0;border:1px dashed rgba(0,245,212,.22);background:none;filter:none}
+.viewfinder.is-active:after,.viewfinder.is-scanning:after{
+  content:"";position:absolute;left:5%;right:5%;height:2px;top:8%;
+  background:linear-gradient(90deg,transparent,var(--cyan),#fff,var(--cyan),transparent);
+  box-shadow:0 0 12px 2px rgba(0,245,212,.5);animation:scanline 2.4s ease-in-out infinite;pointer-events:none
+}
+@keyframes scanline{0%{top:8%;opacity:.45}50%{top:90%;opacity:1}100%{top:8%;opacity:.45}}
+.viewfinder.is-scanning{border-color:var(--cyan);box-shadow:0 0 25px rgba(0,245,212,.2)}
+.corner{display:none}
+.placeholder{position:absolute;inset:0;display:grid;place-items:center;padding:24px;text-align:center;color:#93a4b8;font-size:14px;line-height:1.5}
+.capture-tip{display:flex;gap:10px;align-items:flex-start;margin:12px 0 0;padding:12px;border:1px solid rgba(56,189,248,.14);border-radius:12px;background:rgba(56,189,248,.06);color:#9fc8dc;font-size:12px;line-height:1.5}
+.capture-tip strong{color:#d7f5ff}
+.progress{height:4px;overflow:hidden;margin-top:14px;border-radius:99px;background:rgba(255,255,255,.08)}
+.progress span{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cyan),var(--blue));transition:width .2s}
+.print-sheet{display:none}
+.how{margin-top:24px}
+.how-title{margin:0 0 12px;font-size:17px}
+.how-grid{display:grid;grid-template-columns:1fr;gap:10px}
+.how-card{padding:15px}
+.how-card strong{display:block;margin-bottom:5px;color:var(--cyan);font-size:13px}
+.how-card p{margin:0;color:var(--muted);font-size:12px;line-height:1.55}
+[data-reveal]{opacity:0;transform:translateY(20px);transition:opacity .55s ease,transform .55s ease}
+[data-reveal].revealed{opacity:1;transform:translateY(0)}
+.toast{
+  position:fixed;left:50%;bottom:22px;z-index:20;transform:translate(-50%,16px);
+  padding:11px 16px;border:1px solid rgba(52,211,153,.35);border-radius:999px;
+  background:rgba(8,25,26,.95);color:#a7f3d0;font-size:13px;font-weight:750;
+  box-shadow:0 12px 35px rgba(0,0,0,.35);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s
+}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.gate{min-height:100vh;display:grid;place-items:center;padding:28px;text-align:left}
+.gate-box{max-width:420px;padding:26px;border:1px solid var(--line);border-radius:18px;background:var(--panel)}
+.gate-box h1{font-size:34px;margin-bottom:14px}.gate-box p{font-size:16px;line-height:1.5;margin:0 0 12px;color:var(--muted)}
+.gate-url{font:700 14px var(--mono);overflow-wrap:anywhere;background:#020711;border:1px solid var(--line);padding:10px;border-radius:8px}
+@media(min-width:560px){.sheet{padding-top:38px}.pair>div,.results{padding:22px}.how-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:380px){.sheet{width:calc(100% - 22px)}.pair>div,.results{padding:15px}.route button{font-size:11px;padding:9px 7px}.btn{padding:11px 10px;font-size:12px}}
+@media print{
+  @page{size:A4 portrait;margin:14mm}
+  html,body{width:auto!important;height:auto!important;min-height:0!important;margin:0!important;padding:0!important;background:#fff!important;overflow:visible!important}
+  body *{display:none!important;visibility:hidden!important}
+  .print-sheet{display:block!important;position:static!important;inset:auto!important;width:auto!important;height:auto!important;min-height:0!important;margin:0!important;padding:0!important;background:#fff!important;color:#000!important}
+  .print-sheet p{display:block!important;visibility:visible!important;margin:0!important;padding:0!important;color:#000!important;font:400 18pt/1.55 var(--mono)!important;white-space:pre-wrap!important;overflow-wrap:anywhere!important;word-break:normal!important;break-inside:auto!important;orphans:2;widows:2}
+}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}[data-reveal]{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<section id="gate" class="gate" hidden>
+  <div class="gate-box">
+    <h1>Open this on your phone</h1>
+    <p>This booth works on phones only, because it uses the phone camera.</p>
+    <p>Scan the QR code at the stand, or open this address on your phone:</p>
+    <p class="gate-url" id="gateUrl"></p>
+  </div>
+</section>
+
+<main class="sheet" id="app">
+  <header class="hero">
+    <p class="eyebrow">School exhibition</p>
+    <h1>Write a secret.<br>Scan it back.</h1>
+    <p class="lede">Turn a message into secret code, print it, then use your phone camera to reveal it again.</p>
+    <p class="section-help" id="ocrStatus" role="status" aria-live="polite">Preparing scanner…</p>
+  </header>
+
+  <nav class="route" role="tablist" aria-label="Steps">
+    <button role="tab" id="tab-write" aria-selected="false" aria-controls="write" data-go="write">1. Write</button>
+    <span class="dash" aria-hidden="true"></span>
+    <button role="tab" id="tab-scan" aria-selected="true" aria-controls="scan" data-go="scan">2. Scan &amp; decode</button>
+  </nav>
+
+  <!-- Step 1: write, see the secret code, print -->
+  <section id="write" role="tabpanel" aria-labelledby="tab-write" hidden>
+    <div class="pair" data-reveal>
+      <div>
+        <label class="field-label" for="msg">Your message</label>
+        <p class="section-help">Write a short message. We will print the coded version, not the original.</p>
+        <textarea id="msg" rows="6" maxlength="500" placeholder="MEET ME AT THE LIBRARY AT 7 PM"></textarea>
+        <p class="count"><span id="count">0</span> of 500</p>
+        <div class="actions">
+          <button class="btn primary" id="printBtn">Print the page</button>
+          <button class="btn" id="sampleBtn">Try an example</button>
+        </div>
+        <p class="note" id="writeNote" role="status"></p>
+      </div>
+      <div>
+        <h2>Secret-code preview</h2>
+        <p class="section-help">Copy this line into Word, or print it directly from the app.</p>
+        <div class="cipher-preview" id="liveStamps"><span class="empty">Type a message to create the secret code.</span></div>
+        <div class="actions">
+          <button class="btn" id="copyCodeBtn" disabled>Copy secret code</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Step 2: photograph the encrypted page, then decode it -->
+  <section id="scan" role="tabpanel" aria-labelledby="tab-scan">
+    <div class="pair">
+      <div>
+        <h2>Photograph the page</h2>
+        <p class="section-help">Fit the printed code inside the rectangle. Tap Scan / Capture when the image is sharp.</p>
+        
+        <div class="viewfinder" id="view">
+          <video id="video" autoplay playsinline muted hidden></video>
+          <img id="shot" alt="Your photo of the printed page" hidden>
+          <div class="placeholder" id="ph">Open the camera, or choose a photo of the printed page.</div>
+          <div class="scan-guide" id="scanGuide" aria-hidden="true"></div>
+        </div>
+        <p class="capture-tip"><span aria-hidden="true">✦</span><span><strong>Best result:</strong> use bright, even light and hold the phone still for a moment before taking the photo.</span></p>
+        <div class="progress" id="prog" hidden><span id="progFill"></span></div>
+        <div class="actions">
+          <button class="btn primary" id="camBtn">Open camera</button>
+          <button class="btn" id="snapBtn" hidden>Scan / Capture</button>
+          <label class="btn" for="file">Take Photo / Upload Image</label>
+          <button class="btn" id="sampleScanBtn">Try a sample</button>
+          <input type="file" id="file" accept="image/*" capture="environment" hidden>
+        </div>
+        <p class="note" id="scanNote" role="status"></p>
+      </div>
+      <div>
+        <label class="field-label" for="ocr">Secret text from the page</label>
+        <p class="section-help">Check the recognised letters before decoding. You can correct any mistake here.</p>
+        <textarea id="ocr" rows="5" placeholder="The encrypted text you scan appears here. Fix any mistakes before you decode it."></textarea>
+        <div class="actions">
+          <button class="btn primary" id="revealBtn" disabled>Decode message</button>
+        </div>
+        <p class="note" id="revealNote" role="status"></p>
+      </div>
+    </div>
+
+    <div class="results" id="results" hidden>
+      <div>
+        <h2>Decoded message</h2>
+        <p class="section-help">The original message appears here.</p>
+        <p class="restored" id="outText"></p>
+        <div class="actions"><button class="btn primary" id="copyResultBtn" type="button" disabled>Copy Decrypted Message</button></div>
+      </div>
+    </div>
+  </section>
+  <section class="how" aria-labelledby="howTitle" data-reveal>
+    <h2 class="how-title" id="howTitle">How it works</h2>
+    <div class="how-grid">
+      <article class="how-card" data-reveal><strong>01 / Encode</strong><p>Write a message and create its secret cipher text.</p></article>
+      <article class="how-card" data-reveal><strong>02 / Scan</strong><p>Photograph the printed code and let the scanner read it.</p></article>
+      <article class="how-card" data-reveal><strong>03 / Decode</strong><p>Check the recognised characters and reveal the message.</p></article>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="copyToast" role="status" aria-live="polite">Copied!</div>
+<div class="print-sheet"><p id="printText"></p></div>
+
+<script>
+var $ = function (id) { return document.getElementById(id); };
+
+// Set to false to allow desktop testing
+var PHONE_ONLY = false;
+var isPhone = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+  (window.matchMedia("(pointer: coarse)").matches && window.innerWidth <= 820);
+
+if (PHONE_ONLY && !isPhone) {
+  document.addEventListener("DOMContentLoaded", function () {
+    $("app").hidden = true;
+    $("gateUrl").textContent = location.href;
+    $("gate").hidden = false;
+  });
+}
+var POOL = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+
+function note(id, msg, kind) {
+  var el = $(id);
+  el.textContent = msg;
+  el.className = "note" + (kind ? " " + kind : "");
+}
+
+// The same server serves this page and the API
+async function api(path, text) {
+  var res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text: text })
+  });
+  var data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Something went wrong. Try again.");
+  return data;
+}
+
+// Keep the secret code as a continuous, selectable line for printing or copying.
+function renderStamps(box, text, animate) {
+  box.textContent = text;
+  box.dataset.code = text;
+  $("copyCodeBtn").disabled = !text;
+}
+
+// Letters flicker, then lock in one by one (punctuation stays put)
+function lockIn(box, target) {
+  return new Promise(function (resolve) {
+    var stamps = Array.prototype.slice.call(box.querySelectorAll(".stamp"));
+    var chars = Array.from(target).filter(function (c) { return c !== " "; });
+    var i = 0;
+    var timer = setInterval(function () {
+      stamps.forEach(function (s, k) {
+        var keep = k < i || !/[A-Za-z0-9]/.test(chars[k]);
+        s.textContent = keep ? chars[k] : POOL.charAt(Math.floor(Math.random() * POOL.length));
+      });
+      i++;
+      if (i > chars.length) {
+        clearInterval(timer);
+        stamps.forEach(function (s, k) { s.textContent = chars[k]; });
+        resolve();
+      }
+    }, 45);
+  });
+}
+
+// Tabs
+function go(which) {
+  var write = which === "write";
+  $("write").hidden = !write;
+  $("scan").hidden = write;
+  $("tab-write").setAttribute("aria-selected", String(write));
+  $("tab-scan").setAttribute("aria-selected", String(!write));
+}
+document.querySelectorAll("[data-go]").forEach(function (b) {
+  b.addEventListener("click", function () { go(b.dataset.go); });
+});
+
+// Step 1: live scramble
+var previewTimer;
+$("msg").addEventListener("input", function () {
+  var v = $("msg").value;
+  $("count").textContent = v.length;
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(async function () {
+    if (!v.trim()) {
+      $("liveStamps").innerHTML = '<span class="empty">Type a message to create the secret code.</span>';
+      $("liveStamps").removeAttribute("data-code");
+      $("copyCodeBtn").disabled = true;
+      note("writeNote", "");
+      return;
+    }
+    try {
+      var d = await api("/api/encrypt", v);
+      renderStamps($("liveStamps"), d.result, false);
+      note("writeNote", "");
+    } catch (e) {
+      note("writeNote", e.message, "err");
+    }
+  }, 300);
+});
+
+$("copyCodeBtn").addEventListener("click", async function () {
+  var code = $("liveStamps").dataset.code || "";
+  if (!code) return;
+  try {
+    await navigator.clipboard.writeText(code);
+    note("writeNote", "Secret code copied. Paste it into Word to print.", "ok");
+  } catch (e) {
+    var selection = window.getSelection();
+    var range = document.createRange();
+    range.selectNodeContents($("liveStamps"));
+    selection.removeAllRanges();
+    selection.addRange(range);
+    note("writeNote", "Select the secret code above, then copy it into Word.", "ok");
+  }
+});
+
+$("sampleBtn").addEventListener("click", function () {
+  $("msg").value = "MEET ME AT THE LIBRARY AT 7 PM";
+  $("msg").dispatchEvent(new Event("input"));
+});
+
+$("printBtn").addEventListener("click", async function () {
+  var v = $("msg").value.trim();
+  if (!v) {
+    note("writeNote", "Type a message before you print.", "err");
+    return;
+  }
+  var btn = $("printBtn");
+  btn.disabled = true;
+  try {
+    var d = await api("/api/encrypt", v);
+    $("printText").textContent = d.result;
+    note("writeNote", "Your encrypted page is ready to print.", "ok");
+    window.print();
+  } catch (e) {
+    note("writeNote", e.message, "err");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// Step 2: camera
+var stream = null;
+
+function stopCamera() {
+  if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
+  stream = null;
+  $("video").hidden = true;
+  $("snapBtn").hidden = true;
+  $("camBtn").hidden = false;
+}
+
+$("camBtn").addEventListener("click", async function () {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    note("scanNote", "This browser cannot open the camera. Choose a photo instead.", "err");
+    return;
+  }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+        focusMode: { ideal: "continuous" }
+      },
+      audio: false
+    });
+    $("video").srcObject = stream;
+    $("view").classList.add("is-active");
+    await $("video").play().catch(function () {});
+    $("shot").hidden = true;
+    $("ph").hidden = true;
+    $("video").hidden = false;
+    $("camBtn").hidden = true;
+    $("snapBtn").hidden = false;
+    note("scanNote", "Align the code inside the rectangle, hold steady, then tap Scan / Capture.");
+  } catch (e) {
+    note("scanNote", "The camera is blocked. Allow camera access in your browser, or choose a photo instead.", "err");
+  }
+});
+
+// Map the visible guide rectangle back to source pixels. This compensates for
+// object-fit:cover, so the saved crop matches what the user aligned in preview.
+function cropVisibleGuide(source) {
+  var view = $("view");
+  var guide = $("scanGuide");
+  var sw = source.videoWidth || source.naturalWidth || source.width;
+  var sh = source.videoHeight || source.naturalHeight || source.height;
+  if (!sw || !sh) throw new Error("The camera image is not ready yet.");
+
+  var vw = view.clientWidth, vh = view.clientHeight;
+  var scale = Math.max(vw / sw, vh / sh);
+  var renderedW = sw * scale, renderedH = sh * scale;
+  var offsetX = (vw - renderedW) / 2;
+  var offsetY = (vh - renderedH) / 2;
+  var guideRect = guide.getBoundingClientRect();
+  var viewRect = view.getBoundingClientRect();
+  var gx = guideRect.left - viewRect.left;
+  var gy = guideRect.top - viewRect.top;
+  var sx = Math.max(0, (gx - offsetX) / scale);
+  var sy = Math.max(0, (gy - offsetY) / scale);
+  var ex = Math.min(sw, (gx + guideRect.width - offsetX) / scale);
+  var ey = Math.min(sh, (gy + guideRect.height - offsetY) / scale);
+  var cropW = Math.max(1, ex - sx), cropH = Math.max(1, ey - sy);
+
+  var canvas = document.createElement("canvas");
+  canvas.width = Math.round(cropW);
+  canvas.height = Math.round(cropH);
+  canvas.getContext("2d").drawImage(source, sx, sy, cropW, cropH, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+$("snapBtn").addEventListener("click", function () {
+  try {
+    var cropped = cropVisibleGuide($("video"));
+    stopCamera();
+    $("shot").src = cropped.toDataURL("image/png");
+    $("shot").hidden = false;
+    $("ph").hidden = true;
+    runOCR(cropped);
+  } catch (e) {
+    note("scanNote", e.message || "Could not capture the camera image. Try again.", "err");
+  }
+});
+
+$("sampleScanBtn").addEventListener("click", function () {
+  stopCamera();
+  $("shot").hidden = true;
+  $("ph").hidden = false;
+  $("ph").textContent = "Sample text loaded. No photo needed.";
+  $("ocr").value = "TLLA TL HA AOL SPIYHYF HA 7 WT";
+  $("revealBtn").disabled = false;
+  note("scanNote", "Encrypted sample loaded. Press Decode message.", "ok");
+  note("revealNote", "");
+});
+
+$("file").addEventListener("change", function () {
+  var f = $("file").files[0];
+  if (!f) return;
+  stopCamera();
+  var objectUrl = URL.createObjectURL(f);
+  $("shot").onload = function () {
+    try {
+      var cropped = cropVisibleGuide($("shot"));
+      runOCR(cropped);
+    } catch (e) {
+      note("scanNote", e.message || "Could not prepare this image.", "err");
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+      $("shot").onload = null;
+    }
+  };
+  $("shot").src = objectUrl;
+  $("shot").hidden = false;
+  $("ph").hidden = true;
+});
+
+// Tesseract worker is warmed as soon as the page is ready.
+// The worker/language/core assets are loaded from pinned CDN URLs in this build.
+var ocrWorker = null;
+var ocrWorkerPromise = null;
+
+function setOCRStatus(message, kind) {
+  var el = $("ocrStatus");
+  if (!el) return;
+  el.textContent = message;
+  el.style.color = kind === "err" ? "var(--red)" : "var(--pencil)";
+  el.style.fontWeight = kind === "ok" ? "700" : "400";
+}
+
+async function initializeOCRWorker() {
+  if (ocrWorker) return ocrWorker;
+  if (ocrWorkerPromise) return ocrWorkerPromise;
+
+  ocrWorkerPromise = (async function () {
+    if (!window.Tesseract || !Tesseract.createWorker) {
+      throw new Error("Tesseract.js did not load. Check your internet connection and reload.");
+    }
+
+    setOCRStatus("Preparing scanner…");
+    var worker = await Tesseract.createWorker(
+      "eng",
+      1,
+      {
+        workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js",
+        langPath: "https://tessdata.projectnaptha.com/4.0.0",
+        corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1",
+        logger: function (m) {
+          if (m && m.status === "loading tesseract core") setOCRStatus("Loading scanner engine…");
+          else if (m && m.status === "loading language traineddata") setOCRStatus("Loading English recognition data…");
+        }
+      },
+      {
+        load_system_dawg: "0",
+        load_freq_dawg: "0"
+      }
+    );
+
+    await worker.setParameters({
+      tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
+      tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,!?-"
+    });
+
+    ocrWorker = worker;
+    setOCRStatus("Scanner Ready", "ok");
+    return worker;
+  })().catch(function (error) {
+    ocrWorkerPromise = null;
+    setOCRStatus(error.message || "Scanner could not be initialized.", "err");
+    throw error;
+  });
+
+  return ocrWorkerPromise;
+}
+
+// Convert the cropped guide region to grayscale and stretch its full
+// brightness range to 0–255. No hard black/white threshold is applied.
+function prepareForOCR(src) {
+  var width = src.width, height = src.height;
+  var canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  var ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(src, 0, 0, width, height);
+
+  var image = ctx.getImageData(0, 0, width, height);
+  var data = image.data;
+  var min = 255, max = 0;
+  var grayValues = new Uint8Array(width * height);
+
+  for (var i = 0, p = 0; i < data.length; i += 4, p++) {
+    var gray = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+    grayValues[p] = gray;
+    if (gray < min) min = gray;
+    if (gray > max) max = gray;
+  }
+
+  var span = Math.max(1, max - min);
+  for (var j = 0, k = 0; j < data.length; j += 4, k++) {
+    var stretched = Math.max(0, Math.min(255, Math.round((grayValues[k] - min) * 255 / span)));
+    data[j] = data[j + 1] = data[j + 2] = stretched;
+    data[j + 3] = 255;
+  }
+
+  ctx.putImageData(image, 0, 0);
+  return canvas;
+}
+
+function cleanOCRText(text) {
+  return String(text || "")
+    .replace(/\r/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+async function runOCR(src) {
+  $("view").classList.add("is-scanning");
+  $("snapBtn").classList.add("is-loading");
+  $("prog").hidden = false;
+  $("progFill").style.width = "10%";
+  $("revealBtn").disabled = true;
+
+  try {
+    note("scanNote", "Preparing the aligned image…");
+    var prepared = prepareForOCR(src);
+    $("progFill").style.width = "35%";
+    note("scanNote", "Warming up the scanner…");
+    var worker = await initializeOCRWorker();
+    $("progFill").style.width = "60%";
+    note("scanNote", "Reading the encrypted characters…");
+    var result = await worker.recognize(prepared);
+    var text = cleanOCRText(result && result.data ? result.data.text : "");
+    $("progFill").style.width = "100%";
+    $("ocr").value = text;
+    $("revealBtn").disabled = !text;
+    note("scanNote", text ? "Secret text found. Check it, then decode it." : "No text found. Move closer, improve the light, and try again.", text ? "ok" : "err");
+  } catch (e) {
+    note("scanNote", e.message || "The page could not be read. Try a clearer, better-aligned photo.", "err");
+  } finally {
+    $("prog").hidden = true;
+    $("view").classList.remove("is-scanning");
+    $("snapBtn").classList.remove("is-loading");
+  }
+}
+
+// Pre-warm the OCR worker on page load so the first scan is quicker.
+document.addEventListener("DOMContentLoaded", function () {
+  initializeOCRWorker().catch(function () {
+    // The visible status line reports the initialization error.
+  });
+});
+
+// Lightweight character scramble reveal. The final output is always the API result.
+async function revealScramble(element, finalText) {
+  var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#$%&";
+  var duration = 500;
+  var started = performance.now();
+  element.textContent = "";
+  while (performance.now() - started < duration) {
+    var progress = (performance.now() - started) / duration;
+    var locked = Math.floor(progress * finalText.length);
+    var frame = Array.from(finalText).map(function (character, index) {
+      if (index < locked || !/[A-Za-z0-9]/.test(character)) return character;
+      return chars[Math.floor(Math.random() * chars.length)];
+    }).join("");
+    element.textContent = frame;
+    await new Promise(function (resolve) { requestAnimationFrame(resolve); });
+  }
+  element.textContent = finalText;
+}
+
+// Copy decrypted output and show a brief confirmation toast.
+$("copyResultBtn").addEventListener("click", async function () {
+  var value = $("outText").textContent || "";
+  if (!value) return;
+  try {
+    await navigator.clipboard.writeText(value);
+    var toast = $("copyToast");
+    toast.classList.add("show");
+    window.setTimeout(function () { toast.classList.remove("show"); }, 1500);
+  } catch (error) {
+    note("revealNote", "Copy was blocked by the browser. Select the decoded text and copy it manually.", "err");
+  }
+});
+
+// Scroll reveal: IntersectionObserver keeps the animation lightweight.
+(function setupScrollReveal() {
+  var targets = document.querySelectorAll("[data-reveal]");
+  if (!("IntersectionObserver" in window)) {
+    targets.forEach(function (item) { item.classList.add("revealed"); });
+    return;
+  }
+  var observer = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add("revealed");
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.12, rootMargin: "0px 0px -24px 0px" });
+  targets.forEach(function (item) { observer.observe(item); });
+})();
+
+// Decode the text printed on the page directly.
+$("revealBtn").addEventListener("click", async function () {
+  var text = $("ocr").value.trim();
+  if (!text) return;
+  var btn = $("revealBtn");
+  btn.disabled = true;
+  $("results").hidden = false;
+  $("outText").classList.remove("marked");
+  $("outText").textContent = "";
+  note("revealNote", "");
+  try {
+    var d = await api("/api/decrypt", text);
+    await revealScramble($("outText"), d.result);
+    $("copyResultBtn").disabled = !d.result;
+    $("outText").classList.add("marked");
+    note("revealNote", "Decoded. Compare this with the original message. Letters that look alike, such as I and l, can still be misread by the camera.", "ok");
+  } catch (e) {
+    note("revealNote", e.message, "err");
+  } finally {
+    btn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
